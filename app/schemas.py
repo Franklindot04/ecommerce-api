@@ -26,6 +26,14 @@ class ProductResponse(ProductBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProductListResponse(BaseModel):
+    items: List[ProductResponse]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    total: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
+
+
 # -------------------------
 # CART
 # -------------------------

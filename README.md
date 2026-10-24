@@ -10,11 +10,20 @@ The project was developed incrementally through milestone-based stages, evolving
 
 ### Products API
 - Create products.
-- Retrieve all products.
+- Retrieve products with pagination (`page` defaults to 1; `page_size` defaults to 20 and is capped at 100).
+- Return page items and pagination metadata; products are ordered by ID ascending.
 - Retrieve a single product.
 - Pydantic validation.
 - Seeded demo inventory.
 - Redis-backed caching for product list and product detail retrieval.
+
+The product list supports pagination:
+
+```http
+GET /products?page=1&page_size=20
+```
+
+`page` starts at 1 and defaults to 1. `page_size` defaults to 20 and accepts values from 1 to 100. The response contains `items`, `page`, `page_size`, `total`, and `total_pages`; items are ordered by product ID ascending.
 
 ### Shopping Cart API
 - Add products to cart.

@@ -1,16 +1,15 @@
 import json
 import os
-from typing import List
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.cache_utils import invalidate_product_caches
 from app.database import get_db
 from app.models import Product
 from app.redis_client import redis_client
-from app.schemas import ProductCreate, ProductResponse
+from app.schemas import ProductCreate, ProductListResponse, ProductResponse
 
 load_dotenv()
 
@@ -29,24 +28,47 @@ def serialize_product(product: Product) -> dict:
     }
 
 
-@router.get("/products", response_model=List[ProductResponse])
-async def get_products(db: Session = Depends(get_db)):
-    cache_key = "products:all"
+@router.get("/products", response_model=ProductListResponse)
+async def get_products(
+    page: int = Query(default=1, ge=1, description="Page number, starting at 1"),
+    page_size: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Number of products per page, from 1 to 100",
+    ),
+    db: Session = Depends(get_db),
+):
+    cache_version = await redis_client.get("products:list:version") or "0"
+    cache_key = f"products:list:v{cache_version}:page:{page}:size:{page_size}"
     cached_products = await redis_client.get(cache_key)
 
     if cached_products:
         return json.loads(cached_products)
 
-    products = db.query(Product).all()
-    serialized = [serialize_product(product) for product in products]
+    products_query = db.query(Product)
+    total = products_query.count()
+    products = (
+        products_query.order_by(Product.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    result = {
+        "items": [serialize_product(product) for product in products],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
     await redis_client.setex(
         cache_key,
         PRODUCT_CACHE_TTL,
-        json.dumps(serialized),
+        json.dumps(result),
     )
 
-    return serialized
+    return result
 
 
 @router.get("/products/{product_id}", response_model=ProductResponse)
